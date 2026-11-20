@@ -29,7 +29,35 @@
   "https://www.presseportal.de/blaulicht/pm/65857/6392392",
   "https://www.presseportal.de/blaulicht/pm/65857/6392386",
   "https://www.presseportal.de/blaulicht/pm/65857/6392384",
-  "https://www.presseportal.de/blaulicht/pm/65857/6392381"
+  "https://www.presseportal.de/blaulicht/pm/65857/6392381",
+  "https://www.presseportal.de/blaulicht/pm/30127/6394792",
+  "https://www.presseportal.de/blaulicht/pm/30127/6394761",
+  "https://www.presseportal.de/blaulicht/pm/65857/6394842",
+  "https://www.presseportal.de/blaulicht/pm/65857/6394840",
+  "https://www.presseportal.de/blaulicht/pm/65857/6394838",
+  "https://www.presseportal.de/blaulicht/pm/65857/6394837",
+  "https://www.presseportal.de/blaulicht/pm/65857/6394833",
+  "https://www.presseportal.de/blaulicht/pm/65857/6394832"
  ],
- "heartbeat": "2026-11-20"
+ "heartbeat": "2026-11-20",
+ "einbrueche": [
+  {
+   "datum": "2026-11-20",
+   "lokal": false,
+   "ort": "",
+   "titel": "POL-VIE: Viersen-Rahser: Einbruch in Gesamtschule - Haben Sie etwas beobachtet?"
+  },
+  {
+   "datum": "2026-11-20",
+   "lokal": false,
+   "ort": "",
+   "titel": "POL-VIE: Grefrath-Vinkrath: Einbruch ins Heilpädagogische Zentrum - Hinweise gesucht"
+  },
+  {
+   "datum": "2026-11-20",
+   "lokal": false,
+   "ort": "",
+   "titel": "POL-VIE: Schwalmtal-Waldniel: Einbruch in Einfamilienhaus - Bargeld gestohlen"
+  }
+ ]
 }
