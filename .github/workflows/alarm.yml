@@ -1,0 +1,29 @@
+name: Einbruch-Alarm
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"   # alle 15 Minuten
+  workflow_dispatch:          # erlaubt den manuellen Start über "Run workflow"
+
+permissions:
+  contents: write
+
+concurrency: einbruch-alarm
+
+jobs:
+  pruefen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Polizeimeldungen prüfen
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: python3 alarm.py
+
+      - name: Status speichern
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add state.json
+          git diff --cached --quiet || (git commit -m "Status aktualisiert" && git push)
