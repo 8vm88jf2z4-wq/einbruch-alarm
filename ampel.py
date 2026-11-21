@@ -42,12 +42,34 @@ PUNKTE = {
 VERANSTALTUNGEN = {
     date(2026, 11, 21): "Heimspiel Borussia – Dortmund",
 }
-# Meldungen aus der WhatsApp-Gruppe o. Ä., von Hand nachgetragen (zählen wie Formular-Einträge).
-# art: "einbruch" (4 Punkte für 7 Tage) oder "verdaechtig" (2 Punkte für 3 Tage)
-MANUELLE_MELDUNGEN = [
-    {"datum": "2026-11-19", "art": "einbruch", "ort": "Großheide (unbestätigt)"},
-    {"datum": "2026-11-17", "art": "verdaechtig", "ort": "Garage, Schlüsselschalter manipuliert"},
-]
+# Von Hand nachgetragene Meldungen (z. B. aus der WhatsApp-Gruppe) stehen in meldungen.csv:
+# eine Zeile pro Meldung: Datum;Art;Ort  (Art: einbruch = 4 Punkte für 7 Tage,
+# verdaechtig = 2 Punkte für 3 Tage). Zeilen mit # am Anfang werden ignoriert.
+MELDUNGEN_DATEI = "meldungen.csv"
+
+
+def lade_manuelle_meldungen():
+    meldungen = []
+    try:
+        with open(MELDUNGEN_DATEI, encoding="utf-8") as f:
+            for nr, zeile in enumerate(f, 1):
+                zeile = zeile.strip()
+                if not zeile or zeile.startswith("#"):
+                    continue
+                teile = [t.strip() for t in zeile.split(";")]
+                try:
+                    datum = date.fromisoformat(teile[0]).isoformat()
+                except (ValueError, IndexError):
+                    print(f"Warnung: meldungen.csv Zeile {nr} unlesbar: {zeile}")
+                    continue
+                art = teile[1].lower() if len(teile) > 1 else "verdaechtig"
+                ort = teile[2] if len(teile) > 2 else ""
+                meldungen.append({"datum": datum, "art": "einbruch" if "einbruch" in art else "verdaechtig",
+                                  "ort": ort})
+    except FileNotFoundError:
+        pass
+    print(f"Nachgetragene Meldungen: {len(meldungen)}")
+    return meldungen
 TREND_MIN_WOCHEN = 4   # so viele Wochen Daten braucht der Trendvergleich mindestens
 WOCHENTAGE = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 # ---------------------------------------------------------------------------
@@ -304,7 +326,7 @@ def main():
     status = lade_status()
     einbrueche = list(status.get("einbrueche", []))
     beobachtungen = list(status.get("beobachtungen", []))
-    for m in MANUELLE_MELDUNGEN:
+    for m in lade_manuelle_meldungen():
         if m["art"] == "einbruch":
             einbrueche.append({"datum": m["datum"], "lokal": True, "ort": m["ort"]})
         else:
