@@ -19,6 +19,7 @@ jobs:
       - name: Polizeimeldungen prüfen
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          FORMULAR_CSV: ${{ secrets.FORMULAR_CSV }}
         run: python3 alarm.py
 
       - name: Status speichern
