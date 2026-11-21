@@ -43,8 +43,9 @@ VERANSTALTUNGEN = {
     date(2026, 11, 21): "Heimspiel Borussia – Dortmund",
 }
 # Von Hand nachgetragene Meldungen (z. B. aus der WhatsApp-Gruppe) stehen in meldungen.csv:
-# eine Zeile pro Meldung: Datum;Art;Ort  (Art: einbruch = 4 Punkte für 7 Tage,
-# verdaechtig = 2 Punkte für 3 Tage). Zeilen mit # am Anfang werden ignoriert.
+# eine Zeile pro Meldung: Datum;Art;Ort  (Art: einbruch = in unserer Nähe, 4 Punkte für 7 Tage;
+# verdaechtig = 2 Punkte für 3 Tage; region = Einbruch anderswo in der Stadt, zählt für den
+# Trendvergleich). Zeilen mit # am Anfang werden ignoriert.
 MELDUNGEN_DATEI = "meldungen.csv"
 
 
@@ -64,8 +65,13 @@ def lade_manuelle_meldungen():
                     continue
                 art = teile[1].lower() if len(teile) > 1 else "verdaechtig"
                 ort = teile[2] if len(teile) > 2 else ""
-                meldungen.append({"datum": datum, "art": "einbruch" if "einbruch" in art else "verdaechtig",
-                                  "ort": ort})
+                if "region" in art:
+                    art = "region"
+                elif "einbruch" in art:
+                    art = "einbruch"
+                else:
+                    art = "verdaechtig"
+                meldungen.append({"datum": datum, "art": art, "ort": ort})
     except FileNotFoundError:
         pass
     print(f"Nachgetragene Meldungen: {len(meldungen)}")
@@ -329,6 +335,8 @@ def main():
     for m in lade_manuelle_meldungen():
         if m["art"] == "einbruch":
             einbrueche.append({"datum": m["datum"], "lokal": True, "ort": m["ort"]})
+        elif m["art"] == "region":  # Einbruch anderswo in der Stadt, zählt nur für Trend/Region
+            einbrueche.append({"datum": m["datum"], "lokal": False, "ort": m["ort"]})
         else:
             beobachtungen.append({"datum": m["datum"], "art": m["ort"]})
     seit = status.get("seit")

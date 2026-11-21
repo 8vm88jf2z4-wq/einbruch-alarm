@@ -1,4 +1,8 @@
 # Datum;Art;Ort
-# Art: einbruch oder verdaechtig. Neue Meldungen einfach unten anhängen.
+# Art: einbruch (in unserer Nähe), verdaechtig oder region (anderswo in der Stadt). Neue Meldungen einfach unten anhängen.
 2026-11-19;einbruch;Großheide (unbestätigt)
 2026-11-17;verdaechtig;Garage, Schlüsselschalter manipuliert
+2026-11-15;einbruch;Windberg (Polizei-Radar KW46, Tag unbekannt)
+2026-11-12;region;Innenstadt (Polizei-Radar KW46)
+2026-11-12;region;Giesenkirchen Südost (Polizei-Radar KW46)
+2026-11-12;region;Odenkirchen Süd (Polizei-Radar KW46)
