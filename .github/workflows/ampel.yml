@@ -2,7 +2,7 @@ name: Risikoampel
 
 on:
   schedule:
-    - cron: "50 5 * * 1"    # montags ca. 6:50 Uhr (Sommerzeit 7:50): Wochenausblick
+    - cron: "25 16,17 * * 0" # sonntags: Wochenausblick, gesendet wird der Lauf um ca. 18:30 Uhr
     - cron: "50 11 * * *"   # täglich ca. 12:50 Uhr (Sommerzeit 13:50): Warnung bei Gelb/Rot
   workflow_dispatch:         # manueller Start = Testlauf, schickt beides
 
