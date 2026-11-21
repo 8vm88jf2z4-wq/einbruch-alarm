@@ -3,13 +3,16 @@ Liest die Polizeimeldungen aus dem Presseportal und schickt per ntfy eine
 Push-Nachricht, wenn ein Stadtteil aus der Stichwortliste erwähnt wird.
 Läuft automatisch über GitHub Actions (siehe .github/workflows/alarm.yml).
 """
+import csv
+import hashlib
+import io
 import json
 import os
 import re
 import sys
 import urllib.request
 import xml.etree.ElementTree as ET
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from email.utils import parsedate_to_datetime
 
 # --- Einstellungen ---------------------------------------------------------
@@ -26,6 +29,8 @@ EINBRUCH_WOERTER = ["einbruch", "eingebrochen", "einbrecher", "einbrüche",
                     "aufgehebelt", "hebelspuren", "verdächtig"]
 
 STATE_FILE = "state.json"
+# Link zur veröffentlichten CSV der Formular-Antworten, kommt aus dem Secret FORMULAR_CSV
+FORMULAR_CSV = os.environ.get("FORMULAR_CSV", "").strip()
 NTFY_SERVER = "https://ntfy.sh"
 # ---------------------------------------------------------------------------
 
@@ -65,12 +70,65 @@ def lies_meldungen(xml_bytes):
         yield {"id": kennung, "titel": titel, "link": link, "text": text, "datum": datum}
 
 
-def sende_push(topic, titel, nachricht, link=None, dringend=False):
+# --- Meldeformular der Nachbarn ---------------------------------------------
+def spalte(kopf, *anfaenge):
+    """Findet die Spalte, deren Überschrift mit einem der Anfänge beginnt."""
+    for i, k in enumerate(kopf):
+        if k.strip().lower().startswith(anfaenge):
+            return i
+    return None
+
+
+def lies_datum(text, ersatz):
+    text = (text or "").strip().split(" ")[0]
+    for fmt in ("%d.%m.%Y", "%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            pass
+    return ersatz
+
+
+def lies_formular():
+    """Liefert die Formular-Einträge als Liste von Dicts (leer, falls nicht eingerichtet)."""
+    if not FORMULAR_CSV:
+        return []
+    roh = hole_feed(FORMULAR_CSV).decode("utf-8-sig")
+    zeilen = list(csv.reader(io.StringIO(roh)))
+    if len(zeilen) < 2:
+        return []
+    kopf = zeilen[0]
+    s_zeit = 0
+    s_was = spalte(kopf, "was")
+    s_datum = spalte(kopf, "datum")
+    s_uhr = spalte(kopf, "uhrzeit")
+    s_wo = spalte(kopf, "wo")
+    s_text = spalte(kopf, "beschreibung")
+    s_pol = spalte(kopf, "polizei")
+    feld = lambda z, i: z[i].strip() if i is not None and i < len(z) else ""
+    eintraege = []
+    for z in zeilen[1:]:
+        if not any(z):
+            continue
+        eingang = lies_datum(feld(z, s_zeit), date.today())
+        eintraege.append({
+            "id": "f-" + hashlib.sha1("|".join(z).encode("utf-8")).hexdigest()[:16],
+            "was": feld(z, s_was) or "Sonstiges",
+            "datum": lies_datum(feld(z, s_datum), eingang),
+            "uhr": feld(z, s_uhr)[:5],
+            "wo": feld(z, s_wo),
+            "text": feld(z, s_text),
+            "polizei": feld(z, s_pol),
+        })
+    return eintraege
+
+
+def sende_push(topic, titel, nachricht, link=None, dringend=False, prioritaet=None):
     daten = {
         "topic": topic,
         "title": titel,
         "message": nachricht,
-        "priority": 5 if dringend else 3,
+        "priority": prioritaet or (5 if dringend else 3),
         "tags": ["rotating_light"] if dringend else ["police_car"],
     }
     if link:
@@ -94,6 +152,7 @@ def main():
     if erster_lauf:
         status = {"seen": [], "heartbeat": ""}
     status.setdefault("einbrueche", [])
+    status.setdefault("beobachtungen", [])
     gesehen = set(status["seen"])
     neu_gesehen = []
     treffer = []
@@ -123,6 +182,34 @@ def main():
                 dringend = any(w in gesamt for w in EINBRUCH_WOERTER)
                 treffer.append((quelle, ort, m, dringend))
 
+    # Meldeformular: neue Einträge sofort weitermelden und für die Ampel merken.
+    # In state.json (öffentlich) landen nur Datum und Art, keine Orte oder Beschreibungen.
+    formular_neu = []
+    try:
+        eintraege = lies_formular()
+        if FORMULAR_CSV:
+            print(f"Meldeformular: {len(eintraege)} Einträge gelesen")
+        formular_start = FORMULAR_CSV and not status.get("formular_init")
+        for e in eintraege:
+            if e["id"] in gesehen:
+                continue
+            neu_gesehen.append(e["id"])
+            gesehen.add(e["id"])
+            if formular_start:
+                continue  # beim ersten Einlesen alte Testeinträge nicht melden
+            formular_neu.append(e)
+            art = e["was"].lower()
+            if "einbruch" in art:
+                status["einbrueche"].append({"datum": e["datum"].isoformat(), "lokal": True,
+                                             "ort": "Nachbarschaft", "titel": e["was"]})
+            elif "verdächtig" in art:
+                status["beobachtungen"].append({"datum": e["datum"].isoformat(), "art": e["was"]})
+        if formular_start:
+            status["formular_init"] = True
+            print("Meldeformular: erstes Einlesen, vorhandene Einträge gemerkt.")
+    except Exception as ex:
+        print(f"Warnung: Meldeformular nicht lesbar: {ex}")
+
     if erster_lauf and feeds_gelesen == 0:
         sys.exit("Erster Lauf: kein Feed erreichbar, versuche es beim nächsten Lauf erneut.")
 
@@ -136,12 +223,25 @@ def main():
             kopf = ("EINBRUCH: " if dringend else "Polizeimeldung: ") + ort
             sende_push(topic, kopf, f"{m['titel']}\n({quelle})", m["link"], dringend)
             print(f"Gesendet: {kopf} – {m['titel']}")
+        for e in formular_neu:
+            einbruch = "einbruch" in e["was"].lower()
+            zeilen = [f"Wo: {e['wo'] or 'k. A.'}",
+                      f"Wann: {e['datum']:%d.%m.}" + (f" {e['uhr']} Uhr" if e["uhr"] else "")]
+            if e["text"]:
+                zeilen.append(e["text"])
+            if e["polizei"]:
+                zeilen.append(f"Polizei informiert: {e['polizei']}")
+            sende_push(topic, "Nachbarschaft meldet: " + e["was"], "\n".join(zeilen),
+                       prioritaet=5 if einbruch else 4)
+            print(f"Gesendet: Formular-Eintrag {e['was']}")
 
     # Status speichern: max. 1000 Kennungen, plus wöchentliches Lebenszeichen,
     # damit GitHub den Zeitplan nicht nach 60 Tagen ohne Aktivität abschaltet.
     status["seen"] = (status["seen"] + neu_gesehen)[-1000:]
-    grenze = (date.today() - timedelta(days=30)).isoformat()
+    status.setdefault("seit", date.today().isoformat())  # Start der Aufzeichnung für den Trendvergleich
+    grenze = (date.today() - timedelta(days=90)).isoformat()
     status["einbrueche"] = [e for e in status["einbrueche"] if e["datum"] >= grenze]
+    status["beobachtungen"] = [b for b in status["beobachtungen"] if b["datum"] >= grenze]
     heute = date.today().isoformat()
     letzter = status.get("heartbeat") or "1970-01-01"
     if (date.today() - date.fromisoformat(letzter)).days >= 7:
