@@ -25,6 +25,12 @@ FEEDS = {
 STADTTEILE = ["Windberg", "Großheide", "Grossheide", "Helenabrunn", "Venn", "Eicken"]
 
 # Wörter, bei denen die Nachricht als dringend markiert wird
+# Nur Meldungen mit einem dieser Wörter werden verschickt (Einbruch, Diebstahl, Verdächtiges).
+# Unfälle, Brände, Vermisste usw. werden ignoriert.
+RELEVANTE_WOERTER = ["einbruch", "eingebrochen", "einbrecher", "einbrüche", "aufgehebelt",
+                     "hebelspuren", "aufgebrochen", "diebstahl", "diebe", "gestohlen",
+                     "entwendet", "verdächtig", "trickbetrug", "trickdieb"]
+
 EINBRUCH_WOERTER = ["einbruch", "eingebrochen", "einbrecher", "einbrüche",
                     "aufgehebelt", "hebelspuren", "verdächtig"]
 
@@ -178,7 +184,9 @@ def main():
             if ist_einbruch:  # für die Risikoampel merken
                 status["einbrueche"].append({"datum": m["datum"], "lokal": bool(fund),
                                              "ort": ort, "titel": m["titel"][:120]})
-            if fund:
+            if fund and not any(w in gesamt for w in RELEVANTE_WOERTER):
+                print(f"Übersprungen (nicht relevant): {m['titel']}")
+            elif fund:
                 dringend = any(w in gesamt for w in EINBRUCH_WOERTER)
                 treffer.append((quelle, ort, m, dringend))
 
