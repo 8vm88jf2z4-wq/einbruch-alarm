@@ -3,8 +3,8 @@ name: Risikoampel
 on:
   schedule:
     - cron: "25 16,17 * * 0" # sonntags: Wochenausblick, gesendet wird der Lauf um ca. 18:30 Uhr
-    - cron: "50 11 * * *"   # täglich ca. 12:50 Uhr (Sommerzeit 13:50): Warnung bei Gelb/Rot
-  workflow_dispatch:         # manueller Start = Testlauf, schickt beides
+  workflow_dispatch:         # manueller Start = Testlauf: Wochenausblick + heutiger Stand
+# Warnungen bei einem Wechsel auf Rot oder Gelb-Rot prüft der Einbruch-Alarm alle 15 Minuten.
 
 jobs:
   bewerten:

@@ -22,6 +22,11 @@ jobs:
           FORMULAR_CSV: ${{ secrets.FORMULAR_CSV }}
         run: python3 alarm.py
 
+      - name: Ampel-Wechsel prüfen
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: python3 ampel.py pruefen
+
       - name: Status speichern
         run: |
           git config user.name "github-actions[bot]"

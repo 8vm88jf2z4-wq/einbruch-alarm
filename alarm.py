@@ -86,10 +86,11 @@ def lies_meldungen(xml_bytes):
         text = re.sub(r"<[^>]+>", " ", item.findtext("description") or "")
         kennung = (item.findtext("guid") or link or titel).strip()
         try:
-            datum = parsedate_to_datetime(item.findtext("pubDate")).date().isoformat()
+            zeitpunkt = parsedate_to_datetime(item.findtext("pubDate"))
         except Exception:
-            datum = date.today().isoformat()
-        yield {"id": kennung, "titel": titel, "link": link, "text": text, "datum": datum}
+            zeitpunkt = datetime.now().astimezone()
+        yield {"id": kennung, "titel": titel, "link": link, "text": text,
+               "datum": zeitpunkt.date().isoformat(), "zeit": zeitpunkt.isoformat(timespec="minutes")}
 
 
 # --- Meldeformular der Nachbarn ---------------------------------------------
@@ -199,7 +200,7 @@ def main():
             fund = STADTTEIL_RE.search(m["titel"] + " " + m["text"])
             ort = next(s for s in STADTTEILE if s.lower() == fund.group(1).lower()) if fund else ""
             if ist_einbruch:  # für die Risikoampel merken
-                status["einbrueche"].append({"datum": m["datum"], "lokal": bool(fund),
+                status["einbrueche"].append({"datum": m["datum"], "zeit": m["zeit"], "lokal": bool(fund),
                                              "ort": ort, "titel": m["titel"][:120]})
             if fund and not any(w in gesamt for w in RELEVANTE_WOERTER):
                 print(f"Übersprungen (nicht relevant): {m['titel']}")
@@ -224,11 +225,14 @@ def main():
                 continue  # beim ersten Einlesen alte Testeinträge nicht melden
             formular_neu.append(e)
             art = e["was"].lower()
+            uhr = e["uhr"] if re.fullmatch(r"\d{1,2}:\d{2}", e["uhr"] or "") else "12:00"
+            zeit = f"{e['datum'].isoformat()}T{uhr.zfill(5)}"
             if "einbruch" in art:
-                status["einbrueche"].append({"datum": e["datum"].isoformat(), "lokal": True,
+                status["einbrueche"].append({"datum": e["datum"].isoformat(), "zeit": zeit, "lokal": True,
                                              "ort": "Nachbarschaft", "titel": e["was"]})
             elif "verdächtig" in art:
-                status["beobachtungen"].append({"datum": e["datum"].isoformat(), "art": e["was"]})
+                status["beobachtungen"].append({"datum": e["datum"].isoformat(), "zeit": zeit,
+                                                "art": e["was"]})
         if formular_start:
             status["formular_init"] = True
             print("Meldeformular: erstes Einlesen, vorhandene Einträge gemerkt.")

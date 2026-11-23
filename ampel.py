@@ -1,8 +1,9 @@
 """Einbruch-Risikoampel Windberg
-Berechnet für jeden Tag ein Punkte-Risiko aus Dunkelheit, Wochentag, Feiertagen,
-Schulferien, besonderen Abenden, Regen und aktuellen Einbruchsmeldungen.
+Stufen: ROT = Einbruch/Einbruchsversuch in der Nähe (7 Tage), GELB-ROT = verdächtige
+Beobachtung (3 Tage), sonst GELB oder GRÜN nach Punkten für Dunkelheit, Wetter, Kalender, Trend.
 - sonntags gegen 18:30 Uhr: Wochenausblick für die kommende Woche
-- täglich mittags: Warnung, aber nur bei GELB oder ROT
+- alle 15 Minuten (python3 ampel.py pruefen, aus dem Alarm-Lauf): Nachricht nur, wenn die
+  Ampel durch ein neues Ereignis auf Gelb-Rot oder Rot steigt
 Läuft über GitHub Actions (siehe .github/workflows/ampel.yml).
 """
 import json
@@ -20,8 +21,7 @@ ZONE = ZoneInfo("Europe/Berlin")
 NTFY_SERVER = "https://ntfy.sh"
 STATE_FILE = "state.json"
 
-GELB_AB = 5   # Punkte
-ROT_AB = 7    # Punkte
+GELB_AB = 5   # Punkte aus Rahmenbedingungen für Gelb (Rot/Gelb-Rot nur durch Ereignisse)
 
 PUNKTE = {
     "dunkel_frueh": 2,      # Sonnenuntergang vor 17:30
@@ -31,12 +31,10 @@ PUNKTE = {
     "ferien": 1,            # Schulferien NRW
     "anlass": 1,            # St. Martin, Halloween, Weihnachten, Silvester, Karneval
     "regen": 1,             # mind. 3 Stunden Regen
-    "einbruch_nah": 4,      # Einbruch in euren Stadtteilen in den letzten 7 Tagen
     "einbrueche_stadt": 1,  # Übergang: mind. 3 Einbruchsmeldungen anderswo in 7 Tagen
     "trend_hoch": 1,        # Einbrüche in MG/Viersen mind. 1,5-mal so viele wie üblich
     "trend_sehr_hoch": 2,   # Einbrüche in MG/Viersen mind. doppelt so viele wie üblich
     "veranstaltung": 1,     # Heimspiel Borussia oder eingetragene Großveranstaltung
-    "verdaechtig": 2,       # verdächtige Beobachtung aus dem Meldeformular, letzte 3 Tage
 }
 # Weitere Großveranstaltungen von Hand eintragen: date(Jahr, Monat, Tag): "Name"
 VERANSTALTUNGEN = {
@@ -218,7 +216,64 @@ def lade_status():
 
 
 # --- Bewertung -------------------------------------------------------------
-def bewerte(tag, ferien, regen, einbrueche, beobachtungen=(), veranstaltungen=None, seit=None):
+# Stufen, von niedrig nach hoch. ROT und GELB-ROT hängen nur an Ereignissen,
+# GRÜN und GELB an Rahmenbedingungen (Dunkelheit, Wetter, Kalender, Trend).
+RANG = {"GRÜN": 0, "GELB": 1, "GELB-ROT": 2, "ROT": 3}
+SYMBOL = {"GRÜN": "🟢", "GELB": "🟡", "GELB-ROT": "🟡🔴", "ROT": "🔴"}
+EINBRUCH_TAGE = 7   # so lange hält ein Einbruch in der Nähe die Ampel auf Rot
+VERDACHT_TAGE = 3   # so lange hält eine verdächtige Beobachtung die Ampel auf Gelb-Rot
+
+
+def zeitpunkt(eintrag):
+    """Zeitpunkt eines Ereignisses; ohne Uhrzeit gilt 12:00 Uhr des Tages."""
+    try:
+        z = datetime.fromisoformat(eintrag["zeit"])
+        return z if z.tzinfo else z.replace(tzinfo=ZONE)
+    except (KeyError, TypeError, ValueError):
+        return datetime.fromisoformat(eintrag["datum"] + "T12:00").replace(tzinfo=ZONE)
+
+
+def alter_text(eintrag, jetzt):
+    stunden = (jetzt - zeitpunkt(eintrag)).total_seconds() / 3600
+    if stunden <= 24:
+        return "neues Ereignis (letzte 24 Stunden)"
+    tage = (jetzt.date() - date.fromisoformat(eintrag["datum"])).days
+    return "gestern" if tage <= 1 else f"vor {tage} Tagen"
+
+
+def aktive_ereignisse(tag, einbrueche, beobachtungen):
+    nah = [e for e in einbrueche if e.get("lokal")
+           and 0 <= (tag - date.fromisoformat(e["datum"])).days <= EINBRUCH_TAGE]
+    verdacht = [b for b in beobachtungen
+                if 0 <= (tag - date.fromisoformat(b["datum"])).days <= VERDACHT_TAGE]
+    nah.sort(key=zeitpunkt, reverse=True)
+    verdacht.sort(key=zeitpunkt, reverse=True)
+    return nah, verdacht
+
+
+def ereignis_stufe(tag, einbrueche, beobachtungen):
+    nah, verdacht = aktive_ereignisse(tag, einbrueche, beobachtungen)
+    return "ROT" if nah else "GELB-ROT" if verdacht else None
+
+
+def ereignis_gruende(tag, einbrueche, beobachtungen, jetzt=None):
+    """Ereignisse zuerst, das neueste vorn. Mit jetzt: Altersangabe, sonst Datum."""
+    nah, verdacht = aktive_ereignisse(tag, einbrueche, beobachtungen)
+    gruende = []
+    for e in nah[:3]:
+        wann = alter_text(e, jetzt) if jetzt else f"vom {date.fromisoformat(e['datum']):%d.%m.}"
+        gruende.append(f"Einbruch in der Nähe{': ' + e['ort'] if e.get('ort') else ''} – {wann}")
+    if len(nah) > 3:
+        gruende.append(f"und {len(nah) - 3} weitere Einbrüche in der Nähe")
+    for b in verdacht[:2]:
+        wann = alter_text(b, jetzt) if jetzt else f"vom {date.fromisoformat(b['datum']):%d.%m.}"
+        gruende.append(f"verdächtige Beobachtung – {wann}")
+    return gruende
+
+
+def bewerte(tag, ferien, regen, einbrueche, beobachtungen=(), veranstaltungen=None, seit=None,
+            jetzt=None):
+    """Liefert (stufe, gruende, sonnenuntergang). Gründe: Ereignisse zuerst."""
     gruende, punkte = [], 0
 
     def plus(schluessel, text):
@@ -226,13 +281,37 @@ def bewerte(tag, ferien, regen, einbrueche, beobachtungen=(), veranstaltungen=No
         punkte += PUNKTE[schluessel]
         gruende.append(text)
 
+    fenster = [e for e in einbrueche if 0 <= (tag - date.fromisoformat(e["datum"])).days <= 7]
+    region = [e for e in fenster if not e.get("lokal")]
+    trend = regional_trend(tag, einbrueche, seit)
+    if trend is None:  # noch zu wenig Daten: alte Regel
+        if len(region) >= 3:
+            plus("einbrueche_stadt", f"{len(region)} Einbruchsmeldungen in der Region")
+    else:
+        faktor, aktuell, ueblich = trend
+        text = f"mehr Einbrüche in MG/Viersen als üblich ({aktuell} statt ca. {ueblich:.0f} pro Woche)"
+        if faktor >= 2 and aktuell >= 4:
+            plus("trend_sehr_hoch", text)
+        elif faktor >= 1.5 and aktuell >= 3:
+            plus("trend_hoch", text)
+
     su = sonnenuntergang(tag)
     if su.hour * 60 + su.minute < 17 * 60 + 30:
         plus("dunkel_frueh", f"früh dunkel ({su:%H:%M})")
     elif su.hour * 60 + su.minute < 18 * 60 + 30:
         plus("dunkel", f"Dämmerung am frühen Abend ({su:%H:%M})")
 
+    if regen.get(tag, 0) >= 3:
+        plus("regen", f"Regen ({regen[tag]:.0f} Std.)")
+
+    event = (veranstaltungen or {}).get(tag) or VERANSTALTUNGEN.get(tag)
+    if event:
+        plus("veranstaltung", event)
+
     feiertag = feiertage_nrw(tag.year).get(tag)
+    anlass = besondere_abende(tag.year).get(tag)
+    if anlass and anlass != feiertag:
+        plus("anlass", anlass)
     if feiertag:
         plus("feiertag", feiertag)
     elif tag.weekday() < 5:
@@ -242,45 +321,9 @@ def bewerte(tag, ferien, regen, einbrueche, beobachtungen=(), veranstaltungen=No
     if ferienname:
         plus("ferien", ferienname)
 
-    anlass = besondere_abende(tag.year).get(tag)
-    if anlass and anlass != feiertag:
-        plus("anlass", anlass)
-
-    event = (veranstaltungen or {}).get(tag) or VERANSTALTUNGEN.get(tag)
-    if event:
-        plus("veranstaltung", event)
-
-    if regen.get(tag, 0) >= 3:
-        plus("regen", f"Regen ({regen[tag]:.0f} Std.)")
-
-    fenster = [e for e in einbrueche
-               if 0 <= (tag - date.fromisoformat(e["datum"])).days <= 7]
-    nah = [e for e in fenster if e.get("lokal")]
-    if nah:
-        orte = ", ".join(sorted({e.get("ort", "") for e in nah if e.get("ort")}))
-        plus("einbruch_nah", f"Einbruch in der Nähe ({orte})" if orte else "Einbruch in der Nähe")
-    trend = regional_trend(tag, einbrueche, seit)
-    if trend is None:  # noch zu wenig Daten: alte Regel
-        if len(fenster) - len(nah) >= 3:
-            plus("einbrueche_stadt", f"{len(fenster) - len(nah)} Einbruchsmeldungen in der Region")
-    else:
-        faktor, aktuell, ueblich = trend
-        text = f"mehr Einbrüche in MG/Viersen als üblich ({aktuell} statt ca. {ueblich:.0f} pro Woche)"
-        if faktor >= 2 and aktuell >= 4:
-            plus("trend_sehr_hoch", text)
-        elif faktor >= 1.5 and aktuell >= 3:
-            plus("trend_hoch", text)
-
-    verdacht = [b for b in beobachtungen
-                if 0 <= (tag - date.fromisoformat(b["datum"])).days <= 3]
-    if verdacht:
-        plus("verdaechtig", "verdächtige Beobachtung in der Siedlung")
-
-    farbe = "ROT" if punkte >= ROT_AB else "GELB" if punkte >= GELB_AB else "GRÜN"
-    return farbe, punkte, gruende, su
-
-
-SYMBOL = {"GRÜN": "🟢", "GELB": "🟡", "ROT": "🔴"}
+    # Rahmenbedingungen allein ergeben höchstens Gelb; Rot und Gelb-Rot nur durch Ereignisse.
+    stufe = ereignis_stufe(tag, einbrueche, beobachtungen) or ("GELB" if punkte >= GELB_AB else "GRÜN")
+    return stufe, ereignis_gruende(tag, einbrueche, beobachtungen, jetzt) + gruende, su
 
 
 def sende_push(topic, titel, nachricht, dringend=False, tags=None):
@@ -295,41 +338,22 @@ def wochenausblick(start, ferien, regen, einbrueche, beobachtungen=(), veranstal
     zeilen = []
     for i in range(7):
         tag = start + timedelta(days=i)
-        farbe, _, gruende, _ = bewerte(tag, ferien, regen, einbrueche, beobachtungen, veranstaltungen, seit)
-        zeile = f"{SYMBOL[farbe]} {WOCHENTAGE[tag.weekday()]} {tag:%d.%m.}"
-        if farbe != "GRÜN":
+        stufe, gruende, _ = bewerte(tag, ferien, regen, einbrueche, beobachtungen, veranstaltungen, seit)
+        zeile = f"{SYMBOL[stufe]} {WOCHENTAGE[tag.weekday()]} {tag:%d.%m.}"
+        if stufe != "GRÜN":
             zeile += ": " + ", ".join(gruende)
         zeilen.append(zeile)
-    zeilen.append("\nRegen ist nur für die nächsten Tage verlässlich, neue Einbrüche ändern die Ampel kurzfristig.")
+    zeilen.append("\nRegen ist nur für die nächsten Tage verlässlich, neue Ereignisse ändern die Ampel kurzfristig.")
     return "\n".join(zeilen)
 
 
-def tageswarnung(heute, ferien, regen, einbrueche, beobachtungen=(), veranstaltungen=None, seit=None):
-    farbe, punkte, gruende, su = bewerte(heute, ferien, regen, einbrueche, beobachtungen, veranstaltungen, seit)
-    text = ("Gründe: " + ", ".join(gruende) +
+def statusnachricht(stufe, gruende, su):
+    return ("Gründe: " + ", ".join(gruende) +
             f"\n\nTipp: Ab {su - timedelta(minutes=30):%H:%M} Licht an oder Zeitschaltuhr, "
             "Fenster und Terrassentüren schließen, auf Fremde in der Siedlung achten.")
-    return farbe, punkte, text
 
 
-def main():
-    topic = os.environ.get("NTFY_TOPIC", "").strip()
-    if not topic:
-        sys.exit("Fehler: Das Secret NTFY_TOPIC ist nicht gesetzt.")
-    zeitplan = sys.argv[1] if len(sys.argv) > 1 else ""
-    test = zeitplan == ""                       # manueller Start
-    sonntag = zeitplan.strip().endswith("* * 0")  # Sonntags-Zeitplan
-    jetzt = datetime.now(ZONE)
-    heute = jetzt.date()
-
-    # GitHub plant in UTC: sonntags laufen zwei Starts, gesendet wird nur der
-    # um ca. 18:30 Uhr deutscher Zeit (funktioniert so in Winter- und Sommerzeit).
-    if sonntag and jetzt.hour != 18:
-        print(f"Sonntagslauf um {jetzt:%H:%M} Uhr übersprungen, der andere Start sendet.")
-        return
-    ferien = lade_schulferien(heute, heute + timedelta(days=8))
-    regen = lade_regen(heute, 8)
-    status = lade_status()
+def lade_ereignisse(status):
     einbrueche = list(status.get("einbrueche", []))
     beobachtungen = list(status.get("beobachtungen", []))
     for m in lade_manuelle_meldungen():
@@ -339,27 +363,73 @@ def main():
             einbrueche.append({"datum": m["datum"], "lokal": False, "ort": m["ort"]})
         else:
             beobachtungen.append({"datum": m["datum"], "art": m["ort"]})
+    return einbrueche, beobachtungen
+
+
+def pruefe_wechsel(topic, status, jetzt):
+    """Läuft alle 15 Minuten nach alarm.py. Meldet nur, wenn die Ampel durch ein neues
+    Ereignis auf Gelb-Rot oder Rot steigt. Speichert die Ereignisstufe in state.json."""
+    heute = jetzt.date()
+    einbrueche, beobachtungen = lade_ereignisse(status)
+    neu = ereignis_stufe(heute, einbrueche, beobachtungen) or "KEINE"
+    alt = status.get("ampel_ereignisstufe")
+    rang = lambda s: RANG.get(s, 0)
+    print(f"Ereignisstufe: vorher {alt}, jetzt {neu}")
+    if alt is not None and neu != "KEINE" and rang(neu) > rang(alt):
+        gruende = ereignis_gruende(heute, einbrueche, beobachtungen, jetzt)
+        su = sonnenuntergang(heute)
+        sende_push(topic, f"{SYMBOL[neu]} Einbruch-Ampel jetzt {neu}",
+                   statusnachricht(neu, gruende, su), dringend=(neu == "ROT"),
+                   tags=["rotating_light"])
+        print(f"Wechsel auf {neu} gemeldet")
+    status["ampel_ereignisstufe"] = neu
+    with open(STATE_FILE, "w", encoding="utf-8") as f:
+        json.dump(status, f, ensure_ascii=False, indent=1)
+
+
+def main():
+    topic = os.environ.get("NTFY_TOPIC", "").strip()
+    if not topic:
+        sys.exit("Fehler: Das Secret NTFY_TOPIC ist nicht gesetzt.")
+    modus = sys.argv[1] if len(sys.argv) > 1 else ""
+    jetzt = datetime.now(ZONE)
+    heute = jetzt.date()
+    status = lade_status()
+
+    if modus == "pruefen":
+        pruefe_wechsel(topic, status, jetzt)
+        return
+
+    test = modus == ""                         # manueller Start
+    sonntag = modus.strip().endswith("* * 0")  # Sonntags-Zeitplan
+    if not (test or sonntag):
+        print(f"Unbekannter Modus '{modus}', nichts zu tun.")
+        return
+    # GitHub plant in UTC: sonntags laufen zwei Starts, gesendet wird nur der
+    # um ca. 18:30 Uhr deutscher Zeit (funktioniert so in Winter- und Sommerzeit).
+    if sonntag and jetzt.hour != 18:
+        print(f"Sonntagslauf um {jetzt:%H:%M} Uhr übersprungen, der andere Start sendet.")
+        return
+
+    ferien = lade_schulferien(heute, heute + timedelta(days=8))
+    regen = lade_regen(heute, 8)
+    einbrueche, beobachtungen = lade_ereignisse(status)
     seit = status.get("seit")
     veranstaltungen = lade_heimspiele(heute.year)
     print(f"Im Speicher: {len(einbrueche)} Einbruchsmeldungen, {len(beobachtungen)} Beobachtungen")
 
-    if sonntag or test:
-        sende_push(topic, ("TEST: " if test else "") + "Wochenausblick Einbruchsrisiko",
-                   wochenausblick(heute + timedelta(days=1), ferien, regen, einbrueche, beobachtungen,
-                                  veranstaltungen, seit),
-                   tags=["calendar"])
-        print("Wochenausblick gesendet")
+    sende_push(topic, ("TEST: " if test else "") + "Wochenausblick Einbruchsrisiko",
+               wochenausblick(heute + timedelta(days=1), ferien, regen, einbrueche, beobachtungen,
+                              veranstaltungen, seit),
+               tags=["calendar"])
+    print("Wochenausblick gesendet")
 
-    if not sonntag:
-        farbe, punkte, text = tageswarnung(heute, ferien, regen, einbrueche, beobachtungen,
-                                           veranstaltungen, seit)
-        print(f"Heute: {farbe} ({punkte} Punkte)")
-        if farbe != "GRÜN" or test:
-            sende_push(topic, ("TEST: " if test else "") + f"Einbruchsrisiko heute: {farbe}",
-                       text, dringend=(farbe == "ROT"),
-                       tags=["red_circle" if farbe == "ROT" else "yellow_circle" if farbe == "GELB"
-                             else "green_circle"])
-            print("Tageswarnung gesendet")
+    if test:  # beim manuellen Test zusätzlich den heutigen Stand zeigen
+        stufe, gruende, su = bewerte(heute, ferien, regen, einbrueche, beobachtungen,
+                                     veranstaltungen, seit, jetzt)
+        sende_push(topic, f"TEST: {SYMBOL[stufe]} Einbruch-Ampel heute {stufe}",
+                   statusnachricht(stufe, gruende, su), tags=[])
+        print(f"Heute: {stufe} – Teststatus gesendet")
 
 
 if __name__ == "__main__":
