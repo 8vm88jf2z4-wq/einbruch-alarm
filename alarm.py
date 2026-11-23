@@ -25,14 +25,30 @@ FEEDS = {
 STADTTEILE = ["Windberg", "Großheide", "Grossheide", "Helenabrunn", "Venn", "Eicken"]
 
 # Wörter, bei denen die Nachricht als dringend markiert wird
-# Nur Meldungen mit einem dieser Wörter werden verschickt (Einbruch, Diebstahl, Verdächtiges).
-# Unfälle, Brände, Vermisste usw. werden ignoriert.
-RELEVANTE_WOERTER = ["einbruch", "eingebrochen", "einbrecher", "einbrüche", "aufgehebelt",
-                     "hebelspuren", "aufgebrochen", "diebstahl", "diebe", "gestohlen",
-                     "entwendet", "verdächtig", "trickbetrug", "trickdieb"]
+# Nur einbruchsrelevante Meldungen werden verschickt. Unfälle, Brände, Vermisste,
+# Laden-/Taschendiebstahl, Betrug, Raub usw. werden ignoriert.
+RELEVANTE_WOERTER = ["einbruch", "eingebrochen", "einbrecher", "einbrüche",
+                     "aufgehebelt", "aufzuhebeln", "hebelspuren", "aufgebrochen",
+                     "verdächtige person", "verdächtigen person", "verdächtiger mann",
+                     "verdächtige männer", "verdächtiges fahrzeug", "verdächtigen fahrzeug",
+                     "verdächtige beobachtung", "verdächtige wahrnehmung"]
+
+# Reine Präventions- oder Tipp-Meldungen sind kein Einbruch und dürfen die Ampel nicht erhöhen
+PRAEVENTION_WOERTER = ["einbruchschutz", "einbruchsschutz", "prävention", "einbruchradar",
+                       "einbruchsradar", "beratungsstelle"]
+TAT_WOERTER = ["eingebrochen", "einbrecher", "aufgehebelt", "aufzuhebeln", "hebelspuren",
+               "wohnungseinbruch", "einbruchsversuch", "einbruch in", "einbrüche in", "tatort"]
+
+
+def ist_tat(text):
+    """True, wenn die Meldung von einer Tat handelt und nicht nur von Prävention."""
+    nur_praevention = (any(w in text for w in PRAEVENTION_WOERTER)
+                       and not any(w in text for w in TAT_WOERTER))
+    return not nur_praevention
+
 
 EINBRUCH_WOERTER = ["einbruch", "eingebrochen", "einbrecher", "einbrüche",
-                    "aufgehebelt", "hebelspuren", "verdächtig"]
+                    "aufgehebelt", "aufzuhebeln", "hebelspuren"]
 
 STATE_FILE = "state.json"
 # Link zur veröffentlichten CSV der Formular-Antworten, kommt aus dem Secret FORMULAR_CSV
@@ -178,7 +194,8 @@ def main():
             neu_gesehen.append(m["id"])
             gesehen.add(m["id"])
             gesamt = (m["titel"] + " " + m["text"]).lower()
-            ist_einbruch = any(w in gesamt for w in ("einbruch", "eingebrochen", "einbrecher", "einbrüche"))
+            ist_einbruch = (any(w in gesamt for w in ("einbruch", "eingebrochen", "einbrecher", "einbrüche"))
+                            and ist_tat(gesamt))
             fund = STADTTEIL_RE.search(m["titel"] + " " + m["text"])
             ort = next(s for s in STADTTEILE if s.lower() == fund.group(1).lower()) if fund else ""
             if ist_einbruch:  # für die Risikoampel merken
@@ -187,7 +204,7 @@ def main():
             if fund and not any(w in gesamt for w in RELEVANTE_WOERTER):
                 print(f"Übersprungen (nicht relevant): {m['titel']}")
             elif fund:
-                dringend = any(w in gesamt for w in EINBRUCH_WOERTER)
+                dringend = any(w in gesamt for w in EINBRUCH_WOERTER) and ist_tat(gesamt)
                 treffer.append((quelle, ort, m, dringend))
 
     # Meldeformular: neue Einträge sofort weitermelden und für die Ampel merken.
