@@ -46,7 +46,13 @@
   "https://www.presseportal.de/blaulicht/pm/65857/6395773",
   "https://www.presseportal.de/blaulicht/pm/30127/6395884",
   "https://www.presseportal.de/blaulicht/pm/30127/6396096",
-  "https://www.presseportal.de/blaulicht/pm/30127/6396075"
+  "https://www.presseportal.de/blaulicht/pm/30127/6396075",
+  "https://www.presseportal.de/blaulicht/pm/65857/6396239",
+  "https://www.presseportal.de/blaulicht/pm/65857/6396236",
+  "https://www.presseportal.de/blaulicht/pm/65857/6396234",
+  "https://www.presseportal.de/blaulicht/pm/65857/6396233",
+  "https://www.presseportal.de/blaulicht/pm/65857/6396232",
+  "https://www.presseportal.de/blaulicht/pm/65857/6396230"
  ],
  "heartbeat": "2026-11-20",
  "einbrueche": [
@@ -67,6 +73,13 @@
    "lokal": false,
    "ort": "",
    "titel": "POL-VIE: Schwalmtal-Waldniel: Einbruch in Einfamilienhaus - Bargeld gestohlen"
+  },
+  {
+   "datum": "2026-11-23",
+   "zeit": "2026-11-23T13:52+01:00",
+   "lokal": false,
+   "ort": "",
+   "titel": "POL-VIE: Kreis Viersen: Die Polizei sucht nach Hinweisen zu Wohnungseinbrüchen"
   }
  ],
  "beobachtungen": [],
