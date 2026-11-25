@@ -67,7 +67,10 @@
   "https://www.presseportal.de/blaulicht/pm/30127/6397698",
   "https://www.presseportal.de/blaulicht/pm/30127/6397772",
   "https://www.presseportal.de/blaulicht/pm/30127/6397752",
-  "https://www.presseportal.de/blaulicht/pm/30127/6397882"
+  "https://www.presseportal.de/blaulicht/pm/30127/6397882",
+  "https://www.presseportal.de/blaulicht/pm/65857/6397980",
+  "https://www.presseportal.de/blaulicht/pm/65857/6397978",
+  "https://www.presseportal.de/blaulicht/pm/65857/6397977"
  ],
  "heartbeat": "2026-11-20",
  "einbrueche": [
@@ -102,6 +105,13 @@
    "lokal": false,
    "ort": "",
    "titel": "POL-VIE: Tönisvorst-Vorst: Wohnungseinbrecher stehlen Schmuck"
+  },
+  {
+   "datum": "2026-11-25",
+   "zeit": "2026-11-25T15:22+01:00",
+   "lokal": false,
+   "ort": "",
+   "titel": "POL-VIE: Nettetal-Breyell: Einbruch in Einfamilienhaus - Hinweise bitte an die Polizei"
   }
  ],
  "beobachtungen": [],
