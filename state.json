@@ -72,7 +72,10 @@
   "https://www.presseportal.de/blaulicht/pm/65857/6397978",
   "https://www.presseportal.de/blaulicht/pm/65857/6397977",
   "https://www.presseportal.de/blaulicht/pm/65857/6398057",
-  "https://www.presseportal.de/blaulicht/pm/30127/6398196"
+  "https://www.presseportal.de/blaulicht/pm/30127/6398196",
+  "https://www.presseportal.de/blaulicht/pm/65857/6398727",
+  "https://www.presseportal.de/blaulicht/pm/65857/6398726",
+  "https://www.presseportal.de/blaulicht/pm/65857/6398715"
  ],
  "heartbeat": "2026-11-20",
  "einbrueche": [
@@ -114,6 +117,13 @@
    "lokal": false,
    "ort": "",
    "titel": "POL-VIE: Nettetal-Breyell: Einbruch in Einfamilienhaus - Hinweise bitte an die Polizei"
+  },
+  {
+   "datum": "2026-11-26",
+   "zeit": "2026-11-26T14:44+01:00",
+   "lokal": false,
+   "ort": "",
+   "titel": "POL-VIE: Born / Süchteln: Zwei Einbrüche in Einfamilienhäuser"
   }
  ],
  "beobachtungen": [],
