@@ -80,7 +80,9 @@
   "https://www.presseportal.de/blaulicht/pm/30127/6399360",
   "https://www.presseportal.de/blaulicht/pm/30127/6399459",
   "https://www.presseportal.de/blaulicht/pm/65857/6399422",
-  "https://www.presseportal.de/blaulicht/pm/65857/6399398"
+  "https://www.presseportal.de/blaulicht/pm/65857/6399398",
+  "https://www.presseportal.de/blaulicht/pm/30127/6399477",
+  "https://www.presseportal.de/blaulicht/pm/65857/6399493"
  ],
  "heartbeat": "2026-11-27",
  "einbrueche": [
@@ -136,6 +138,13 @@
    "lokal": false,
    "ort": "",
    "titel": "POL-MG: 2. Fortschreibung: Gemeinsame Pressemeldung der Staatsanwaltschaft Krefeld und Polizei Mönchengladbach: Zeuge na"
+  },
+  {
+   "datum": "2026-11-27",
+   "zeit": "2026-11-27T14:50+01:00",
+   "lokal": false,
+   "ort": "",
+   "titel": "POL-VIE: Willich/Mönchengladbach: 2. Fortschreibung: Gemeinsame PM der Staatsanwaltschaft Krefeld und Polizei Mönchengla"
   }
  ],
  "beobachtungen": [],
