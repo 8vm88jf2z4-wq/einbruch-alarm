@@ -77,7 +77,10 @@
   "https://www.presseportal.de/blaulicht/pm/65857/6398726",
   "https://www.presseportal.de/blaulicht/pm/65857/6398715",
   "https://www.presseportal.de/blaulicht/pm/65857/6399243",
-  "https://www.presseportal.de/blaulicht/pm/30127/6399360"
+  "https://www.presseportal.de/blaulicht/pm/30127/6399360",
+  "https://www.presseportal.de/blaulicht/pm/30127/6399459",
+  "https://www.presseportal.de/blaulicht/pm/65857/6399422",
+  "https://www.presseportal.de/blaulicht/pm/65857/6399398"
  ],
  "heartbeat": "2026-11-27",
  "einbrueche": [
@@ -126,6 +129,13 @@
    "lokal": false,
    "ort": "",
    "titel": "POL-VIE: Born / Süchteln: Zwei Einbrüche in Einfamilienhäuser"
+  },
+  {
+   "datum": "2026-11-27",
+   "zeit": "2026-11-27T14:19+01:00",
+   "lokal": false,
+   "ort": "",
+   "titel": "POL-MG: 2. Fortschreibung: Gemeinsame Pressemeldung der Staatsanwaltschaft Krefeld und Polizei Mönchengladbach: Zeuge na"
   }
  ],
  "beobachtungen": [],
